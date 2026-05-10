@@ -149,7 +149,7 @@ export async function run(depsOverride?: Partial<RunDeps>): Promise<void> {
   await writeStepSummary(outcomes);
 
   if (unhealthy.length > 0) {
-    const transportOnly = unhealthy.every(
+    const transportOnly = outcomes.every(
       (o) => o.outcome.kind === 'unhealthy' && o.outcome.reason === 'transport_error',
     );
     const summaryLine = `${unhealthy.length} of ${outcomes.length} monitor${outcomes.length === 1 ? '' : 's'} unhealthy.`;

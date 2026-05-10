@@ -5,6 +5,8 @@ import type { MonitorStatus } from './policy.js';
 export const API_BASE_URL = 'https://api.uptimemonitoring.com';
 export const USER_AGENT = 'uptimemonitoring-assert-healthy';
 
+const KNOWN_STATUSES: readonly string[] = ['up', 'down', 'unknown', 'flapping'];
+
 export interface MonitorDetail {
   monitor: { id: number; url?: string; type?: string };
   state: {
@@ -60,7 +62,13 @@ export function createFetcher(opts: FetcherOptions): Fetcher {
       }
 
       const status = response.message.statusCode ?? 0;
-      const body = await response.readBody();
+      let body: string;
+      try {
+        body = await response.readBody();
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { kind: 'transport_error', message: `body read failed: ${message}` };
+      }
 
       if (status >= 200 && status < 300) {
         try {
@@ -74,6 +82,12 @@ export function createFetcher(opts: FetcherOptions): Fetcher {
             return {
               kind: 'transport_error',
               message: 'response missing state.status',
+            };
+          }
+          if (!KNOWN_STATUSES.includes(parsed.state.status)) {
+            return {
+              kind: 'transport_error',
+              message: `unexpected state.status from API: ${String(parsed.state.status)}`,
             };
           }
           return { kind: 'ok', detail: parsed };

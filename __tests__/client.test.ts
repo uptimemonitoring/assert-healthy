@@ -135,6 +135,39 @@ describe('createFetcher.getMonitor', () => {
     expect(result.kind).toBe('transport_error');
   });
 
+  it('returns transport_error on unknown state.status (API schema drift)', async () => {
+    state.getMock.mockResolvedValue(
+      makeMockResponse(
+        JSON.stringify({
+          monitor: { id: 1 },
+          state: { status: 'paused', last_check_at: null },
+        }),
+        200,
+      ),
+    );
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('transport_error');
+    if (result.kind === 'transport_error') {
+      expect(result.message).toContain('paused');
+    }
+  });
+
+  it('returns transport_error when readBody rejects mid-stream', async () => {
+    state.getMock.mockResolvedValue({
+      message: { statusCode: 200 },
+      readBody: () => Promise.reject(new Error('socket hang up')),
+    });
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('transport_error');
+    if (result.kind === 'transport_error') {
+      expect(result.message).toContain('socket hang up');
+    }
+  });
+
   it('strips trailing slashes from baseUrl', async () => {
     state.getMock.mockResolvedValue(
       makeMockResponse(

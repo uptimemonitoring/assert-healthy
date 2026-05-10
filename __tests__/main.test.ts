@@ -236,6 +236,20 @@ describe('run (multi-monitor fan-out)', () => {
     expect(process.exitCode).toBe(3);
   });
 
+  it('one healthy + one transport error does NOT collapse to exit 3', async () => {
+    process.env['INPUT_MONITOR-IDS'] = '1,2';
+    process.env['INPUT_UNKNOWN-RETRY-DELAY-SECONDS'] = '0';
+    const { fetcher } = makeFetcher({
+      1: [ok(detail('up'))],
+      2: [{ kind: 'transport_error', message: 'ECONNRESET' }],
+    });
+    await run({ fetcher, sleep: vi.fn() });
+    // We got a verdict for monitor 1 (healthy), so the run is "regular unhealthy".
+    expect(process.exitCode).not.toBe(3);
+    expect(setOutput).toHaveBeenCalledWith('unhealthy-count', '1');
+    expect(setOutput).toHaveBeenCalledWith('unhealthy-ids', '2');
+  });
+
   it('invalid api-key → exit code 2', async () => {
     process.env['INPUT_API-KEY'] = 'not-a-key';
     process.env['INPUT_MONITOR-IDS'] = '1';
