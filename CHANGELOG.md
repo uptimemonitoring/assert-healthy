@@ -1,0 +1,17 @@
+# Changelog
+
+All notable changes to `assert-healthy` are documented here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## 1.0.0 — Initial release
+
+### Added
+
+- `assert-healthy` GitHub Action: assert one or more uptimemonitoring.com monitors are healthy.
+- Inputs: `api-key`, `monitor-ids` (comma- or newline-separated), `strict-flapping` (default `true`), `unknown-retry-delay-seconds` (default `10`).
+- Outputs: `unhealthy-count`, `unhealthy-ids`.
+- Status mapping: `up` → pass, `down` → fail, `flapping` → fail (or pass with `strict-flapping: false`), `unknown` → retry once then fail.
+- Distinct exit codes: `1` (unhealthy), `2` (input error), `3` (all transport errors).
+- Step summary table with one row per monitor.
+- CI: lint, typecheck, test (≥90% line coverage), build, and a `dist/`-in-sync guard.
+- Weekly canary workflow that runs the action against a known-up and known-down monitor and files a labelled issue on mismatch.
+- Release workflow that force-moves the major-version ref (`v1`) to the latest tagged release.
