@@ -36,23 +36,18 @@ jobs:
           api-key: ${{ secrets.UMK_LIVE_TEST_KEY }}
           monitor-ids: ${{ vars.CANARY_MONITOR_DOWN_ID }}
         continue-on-error: true
-      - name: Verify the action correctly identified the monitor as down
+      - name: Verify the action got a real "down" verdict (not an API error)
         env:
           OUTCOME: ${{ steps.run.outcome }}
-          UNHEALTHY_COUNT: ${{ steps.run.outputs.unhealthy-count }}
-          UNHEALTHY_IDS: ${{ steps.run.outputs.unhealthy-ids }}
+          DOWN_IDS: ${{ steps.run.outputs.down-ids }}
           EXPECTED_ID: ${{ vars.CANARY_MONITOR_DOWN_ID }}
         run: |
           if [ "$OUTCOME" != "failure" ]; then
             echo "::error::Expected the action to fail on the known-down monitor, got outcome=$OUTCOME"
             exit 1
           fi
-          if [ "$UNHEALTHY_COUNT" != "1" ]; then
-            echo "::error::Expected unhealthy-count=1, got '$UNHEALTHY_COUNT'. The action may have failed for a reason other than the monitor being down (auth, network, schema)."
-            exit 1
-          fi
-          if [ "$UNHEALTHY_IDS" != "$EXPECTED_ID" ]; then
-            echo "::error::Expected unhealthy-ids=$EXPECTED_ID, got '$UNHEALTHY_IDS'."
+          if [ "$DOWN_IDS" != "$EXPECTED_ID" ]; then
+            echo "::error::Expected down-ids=$EXPECTED_ID (a confirmed 'down' API verdict), got '$DOWN_IDS'. If empty, the action failed for a reason other than the monitor being down (auth revoked, network, API schema drift)."
             exit 1
           fi
 

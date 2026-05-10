@@ -168,6 +168,60 @@ describe('createFetcher.getMonitor', () => {
     }
   });
 
+  it('retries once on 500 (not just 502/503/504)', async () => {
+    state.getMock
+      .mockResolvedValueOnce(makeMockResponse('{"error":"boom"}', 500))
+      .mockResolvedValueOnce(
+        makeMockResponse(
+          JSON.stringify({
+            monitor: { id: 1 },
+            state: { status: 'up', last_check_at: 't' },
+          }),
+          200,
+        ),
+      );
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X' });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('ok');
+    expect(state.getMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('retries once on transport error and surfaces the second result', async () => {
+    state.getMock.mockRejectedValueOnce(new Error('ECONNRESET')).mockResolvedValueOnce(
+      makeMockResponse(
+        JSON.stringify({
+          monitor: { id: 1 },
+          state: { status: 'up', last_check_at: 't' },
+        }),
+        200,
+      ),
+    );
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X' });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('ok');
+    expect(state.getMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry on 4xx', async () => {
+    state.getMock.mockResolvedValue(makeMockResponse('{"error":"unauthorized"}', 401));
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X' });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('http_error');
+    expect(state.getMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('with retryOn5xx=false does not retry 5xx', async () => {
+    state.getMock.mockResolvedValue(makeMockResponse('boom', 503));
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('http_error');
+    expect(state.getMock).toHaveBeenCalledTimes(1);
+  });
+
   it('strips trailing slashes from baseUrl', async () => {
     state.getMock.mockResolvedValue(
       makeMockResponse(

@@ -23,9 +23,11 @@ inputs:
 
 outputs:
   unhealthy-count:
-    description: 'Number of monitors that were unhealthy.'
+    description: 'Number of monitors that were unhealthy (any reason).'
   unhealthy-ids:
-    description: 'Comma-separated IDs of unhealthy monitors (empty if all healthy).'
+    description: 'Comma-separated IDs of unhealthy monitors (empty if all healthy). Includes monitors that failed for any reason — down, flapping, http error, transport error.'
+  down-ids:
+    description: 'Comma-separated IDs of monitors with a confirmed `down` verdict from the API. A subset of `unhealthy-ids` that excludes API errors and transport failures, so callers can distinguish "monitor is genuinely down" from "we could not get a verdict".'
 
 runs:
   using: 'node20'

@@ -143,8 +143,12 @@ export async function run(depsOverride?: Partial<RunDeps>): Promise<void> {
   }
 
   const unhealthy = outcomes.filter((o) => o.outcome.kind === 'unhealthy');
+  const down = outcomes.filter(
+    (o) => o.outcome.kind === 'unhealthy' && o.outcome.reason === 'down',
+  );
   core.setOutput('unhealthy-count', String(unhealthy.length));
   core.setOutput('unhealthy-ids', unhealthy.map((o) => o.id).join(','));
+  core.setOutput('down-ids', down.map((o) => o.id).join(','));
 
   await writeStepSummary(outcomes);
 
@@ -172,9 +176,3 @@ function logOutcome(o: MonitorOutcome): void {
   }
   core.error(`FAIL monitor ${o.id} — ${o.observedStatus}${lastSeen}${detail}`);
 }
-
-/* v8 ignore start */
-if (process.env.VITEST !== 'true') {
-  await run();
-}
-/* v8 ignore stop */

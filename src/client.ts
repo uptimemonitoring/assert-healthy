@@ -42,61 +42,69 @@ export interface FetcherOptions {
 export function createFetcher(opts: FetcherOptions): Fetcher {
   const baseUrl = (opts.baseUrl ?? API_BASE_URL).replace(/\/+$/, '');
   const auth = new BearerCredentialHandler(opts.apiKey);
-  const client = new HttpClient(USER_AGENT, [auth], {
-    allowRetries: opts.retryOn5xx ?? true,
-    maxRetries: opts.retryOn5xx === false ? 0 : 1,
-  });
+  const retryOn5xx = opts.retryOn5xx ?? true;
+  const client = new HttpClient(USER_AGENT, [auth]);
+
+  async function fetchOnce(url: string): Promise<FetchResult> {
+    let response: HttpClientResponse;
+    try {
+      response = await client.get(url, {
+        accept: 'application/json',
+        'user-agent': USER_AGENT,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { kind: 'transport_error', message };
+    }
+
+    const status = response.message.statusCode ?? 0;
+    let body: string;
+    try {
+      body = await response.readBody();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return { kind: 'transport_error', message: `body read failed: ${message}` };
+    }
+
+    if (status >= 200 && status < 300) {
+      try {
+        const parsed = JSON.parse(body) as MonitorDetail;
+        if (
+          !parsed ||
+          typeof parsed !== 'object' ||
+          !parsed.state ||
+          typeof parsed.state.status !== 'string'
+        ) {
+          return {
+            kind: 'transport_error',
+            message: 'response missing state.status',
+          };
+        }
+        if (!KNOWN_STATUSES.includes(parsed.state.status)) {
+          return {
+            kind: 'transport_error',
+            message: `unexpected state.status from API: ${String(parsed.state.status)}`,
+          };
+        }
+        return { kind: 'ok', detail: parsed };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        return { kind: 'transport_error', message: `invalid JSON: ${message}` };
+      }
+    }
+    return { kind: 'http_error', status, body };
+  }
 
   return {
     async getMonitor(monitorId: number): Promise<FetchResult> {
       const url = `${baseUrl}/api/v1/monitors/${monitorId}`;
-      let response: HttpClientResponse;
-      try {
-        response = await client.get(url, {
-          accept: 'application/json',
-          'user-agent': USER_AGENT,
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { kind: 'transport_error', message };
-      }
-
-      const status = response.message.statusCode ?? 0;
-      let body: string;
-      try {
-        body = await response.readBody();
-      } catch (err) {
-        const message = err instanceof Error ? err.message : String(err);
-        return { kind: 'transport_error', message: `body read failed: ${message}` };
-      }
-
-      if (status >= 200 && status < 300) {
-        try {
-          const parsed = JSON.parse(body) as MonitorDetail;
-          if (
-            !parsed ||
-            typeof parsed !== 'object' ||
-            !parsed.state ||
-            typeof parsed.state.status !== 'string'
-          ) {
-            return {
-              kind: 'transport_error',
-              message: 'response missing state.status',
-            };
-          }
-          if (!KNOWN_STATUSES.includes(parsed.state.status)) {
-            return {
-              kind: 'transport_error',
-              message: `unexpected state.status from API: ${String(parsed.state.status)}`,
-            };
-          }
-          return { kind: 'ok', detail: parsed };
-        } catch (err) {
-          const message = err instanceof Error ? err.message : String(err);
-          return { kind: 'transport_error', message: `invalid JSON: ${message}` };
-        }
-      }
-      return { kind: 'http_error', status, body };
+      const first = await fetchOnce(url);
+      if (!retryOn5xx) return first;
+      const isRetryable =
+        (first.kind === 'http_error' && first.status >= 500 && first.status < 600) ||
+        first.kind === 'transport_error';
+      if (!isRetryable) return first;
+      return fetchOnce(url);
     },
   };
 }

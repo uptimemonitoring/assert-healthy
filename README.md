@@ -22,10 +22,11 @@ If the monitor is healthy, the step exits 0. If it is `down`, the step exits 1 a
 
 ## Outputs
 
-| Name              | Description                                                       |
-| ----------------- | ----------------------------------------------------------------- |
-| `unhealthy-count` | Number of monitors that were unhealthy.                           |
-| `unhealthy-ids`   | Comma-separated IDs of unhealthy monitors. Empty on full success. |
+| Name              | Description                                                                                                                                                                                                |
+| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unhealthy-count` | Number of monitors that were unhealthy (any reason).                                                                                                                                                       |
+| `unhealthy-ids`   | Comma-separated IDs of unhealthy monitors. Empty on full success. Includes monitors that failed for any reason — down, flapping, HTTP error, transport error.                                              |
+| `down-ids`        | Comma-separated IDs of monitors with a confirmed `down` verdict from the API. A subset of `unhealthy-ids` that excludes API errors. Use this when you need to distinguish "really down" from "can't tell". |
 
 ## Status mapping
 

@@ -8,6 +8,7 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: ['src/**/*.ts'],
+      exclude: ['src/entrypoint.ts'],
       thresholds: {
         lines: 90,
         functions: 85,

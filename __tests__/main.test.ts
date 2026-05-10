@@ -167,7 +167,6 @@ describe('run (multi-monitor fan-out)', () => {
 
   beforeEach(() => {
     originalEnv = { ...process.env };
-    process.env.VITEST = 'true';
     process.env.GITHUB_STEP_SUMMARY = '';
     process.env['INPUT_API-KEY'] = apiKey;
     process.exitCode = 0;
@@ -196,7 +195,22 @@ describe('run (multi-monitor fan-out)', () => {
     expect(setFailed).not.toHaveBeenCalled();
     expect(setOutput).toHaveBeenCalledWith('unhealthy-count', '0');
     expect(setOutput).toHaveBeenCalledWith('unhealthy-ids', '');
+    expect(setOutput).toHaveBeenCalledWith('down-ids', '');
     expect(process.exitCode).toBe(0);
+  });
+
+  it('down-ids includes only confirmed-down monitors, excludes http_error', async () => {
+    process.env['INPUT_MONITOR-IDS'] = '1,2,3';
+    process.env['INPUT_UNKNOWN-RETRY-DELAY-SECONDS'] = '0';
+    const { fetcher } = makeFetcher({
+      1: [ok(detail('down'))], // real down
+      2: [{ kind: 'http_error', status: 401, body: '{"error":"x"}' }], // API error
+      3: [ok(detail('up'))], // healthy
+    });
+    await run({ fetcher, sleep: vi.fn() });
+    expect(setOutput).toHaveBeenCalledWith('unhealthy-count', '2');
+    expect(setOutput).toHaveBeenCalledWith('unhealthy-ids', '1,2');
+    expect(setOutput).toHaveBeenCalledWith('down-ids', '1');
   });
 
   it('one down out of two → failure with ID list', async () => {
