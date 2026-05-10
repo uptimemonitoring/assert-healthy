@@ -75,6 +75,8 @@ When 1.x.y ships, the moving `v1` ref is force-updated to point at the new tag. 
 - **HTTP 4xx (auth/permission/not-found)** — fails the step with the status and a one-line body excerpt. The API key is never echoed.
 - **HTTP 5xx** — retried once internally before failing.
 - **Transport errors (DNS, TLS, reset, timeout)** — fails the step. If every monitor in the run failed this way, the exit code is 3 instead of 1.
+- **Protocol errors (HTTP 200 but invalid JSON, missing fields, or an unknown `state.status`)** — fails the step with exit 1. The server was reachable, so this is **not** a transport error and does not produce exit 3.
+- **Retry on `unknown` whose retry fetch fails** — keeps the first `unknown` reading and treats the run as `unhealthy` after retry (exit 1). The first verdict was real API output, so it is not silently demoted to "transport error".
 
 ## Privacy
 

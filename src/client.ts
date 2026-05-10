@@ -27,7 +27,8 @@ export interface MonitorDetail {
 export type FetchResult =
   | { kind: 'ok'; detail: MonitorDetail }
   | { kind: 'http_error'; status: number; body: string }
-  | { kind: 'transport_error'; message: string };
+  | { kind: 'transport_error'; message: string }
+  | { kind: 'protocol_error'; message: string };
 
 export interface Fetcher {
   getMonitor(monitorId: number): Promise<FetchResult>;
@@ -76,20 +77,20 @@ export function createFetcher(opts: FetcherOptions): Fetcher {
           typeof parsed.state.status !== 'string'
         ) {
           return {
-            kind: 'transport_error',
+            kind: 'protocol_error',
             message: 'response missing state.status',
           };
         }
         if (!KNOWN_STATUSES.includes(parsed.state.status)) {
           return {
-            kind: 'transport_error',
+            kind: 'protocol_error',
             message: `unexpected state.status from API: ${String(parsed.state.status)}`,
           };
         }
         return { kind: 'ok', detail: parsed };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return { kind: 'transport_error', message: `invalid JSON: ${message}` };
+        return { kind: 'protocol_error', message: `invalid JSON: ${message}` };
       }
     }
     return { kind: 'http_error', status, body };

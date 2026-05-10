@@ -119,23 +119,23 @@ describe('createFetcher.getMonitor', () => {
     expect(result).toEqual({ kind: 'transport_error', message: 'ECONNRESET' });
   });
 
-  it('returns transport_error on invalid JSON', async () => {
+  it('returns protocol_error on invalid JSON (server reachable, body unusable)', async () => {
     state.getMock.mockResolvedValue(makeMockResponse('not json', 200));
     const { createFetcher } = await import('../src/client.js');
     const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
     const result = await fetcher.getMonitor(1);
-    expect(result.kind).toBe('transport_error');
+    expect(result.kind).toBe('protocol_error');
   });
 
-  it('returns transport_error when state.status missing', async () => {
+  it('returns protocol_error when state.status missing', async () => {
     state.getMock.mockResolvedValue(makeMockResponse(JSON.stringify({ monitor: { id: 1 } }), 200));
     const { createFetcher } = await import('../src/client.js');
     const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
     const result = await fetcher.getMonitor(1);
-    expect(result.kind).toBe('transport_error');
+    expect(result.kind).toBe('protocol_error');
   });
 
-  it('returns transport_error on unknown state.status (API schema drift)', async () => {
+  it('returns protocol_error on unknown state.status (API schema drift)', async () => {
     state.getMock.mockResolvedValue(
       makeMockResponse(
         JSON.stringify({
@@ -148,8 +148,8 @@ describe('createFetcher.getMonitor', () => {
     const { createFetcher } = await import('../src/client.js');
     const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
     const result = await fetcher.getMonitor(1);
-    expect(result.kind).toBe('transport_error');
-    if (result.kind === 'transport_error') {
+    expect(result.kind).toBe('protocol_error');
+    if (result.kind === 'protocol_error') {
       expect(result.message).toContain('paused');
     }
   });

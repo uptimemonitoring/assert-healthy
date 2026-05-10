@@ -10,7 +10,9 @@ export const EXIT_TRANSPORT = 3;
 export interface MonitorOutcome {
   id: number;
   observedStatus: MonitorStatus | 'error';
-  outcome: PolicyOutcome | { kind: 'unhealthy'; reason: 'http_error' | 'transport_error' };
+  outcome:
+    | PolicyOutcome
+    | { kind: 'unhealthy'; reason: 'http_error' | 'transport_error' | 'protocol_error' };
   lastCheckAt: string | null;
   region: string | null;
   detail: string;
@@ -39,7 +41,11 @@ export async function evaluateMonitor(
   }
   const second = await deps.fetcher.getMonitor(id);
   if (second.kind !== 'ok') {
-    return errorOutcome(id, second);
+    // Retry didn't get a fresh verdict, but the first reading was a real
+    // API verdict (unknown). Apply decideAfterRetry to that, so the run
+    // exits as "unknown after retry" — exit 1, not exit 3.
+    const final = decideAfterRetry(first.detail.state.status, opts);
+    return outcomeFromDetail(id, first.detail, final);
   }
   const final = decideAfterRetry(second.detail.state.status, opts);
   return outcomeFromDetail(id, second.detail, final);
@@ -71,6 +77,16 @@ function errorOutcome(id: number, result: Exclude<FetchResult, { kind: 'ok' }>):
       lastCheckAt: null,
       region: null,
       detail: `HTTP ${result.status}: ${truncateBody(result.body)}`,
+    };
+  }
+  if (result.kind === 'protocol_error') {
+    return {
+      id,
+      observedStatus: 'error',
+      outcome: { kind: 'unhealthy', reason: 'protocol_error' },
+      lastCheckAt: null,
+      region: null,
+      detail: result.message,
     };
   }
   return {

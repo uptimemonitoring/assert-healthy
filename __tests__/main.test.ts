@@ -157,6 +157,34 @@ describe('evaluateMonitor', () => {
     expect(out.outcome).toEqual({ kind: 'unhealthy', reason: 'transport_error' });
     expect(out.detail).toBe('ECONNREFUSED');
   });
+
+  it('protocol_error → unhealthy/protocol_error', async () => {
+    const { fetcher } = makeFetcher({
+      9: [{ kind: 'protocol_error', message: 'invalid JSON: unexpected token <' }],
+    });
+    const out = await evaluateMonitor(
+      9,
+      { fetcher, sleep: vi.fn() },
+      { strictFlapping: true, unknownRetryDelayMs: 0 },
+    );
+    expect(out.outcome).toEqual({ kind: 'unhealthy', reason: 'protocol_error' });
+    expect(out.detail).toContain('invalid JSON');
+  });
+
+  it('first unknown + retry transport-fails → unhealthy_after_retry (preserves first verdict)', async () => {
+    const { fetcher } = makeFetcher({
+      10: [ok(detail('unknown')), { kind: 'transport_error', message: 'ECONNRESET' }],
+    });
+    const out = await evaluateMonitor(
+      10,
+      { fetcher, sleep: vi.fn() },
+      { strictFlapping: true, unknownRetryDelayMs: 0 },
+    );
+    expect(out.outcome).toEqual({ kind: 'unhealthy', reason: 'unknown_after_retry' });
+    // Region/last-check should come from the first reading we DID get.
+    expect(out.region).toBe('EU');
+    expect(out.lastCheckAt).toBe('2026-05-10T20:00:00Z');
+  });
 });
 
 describe('run (multi-monitor fan-out)', () => {
@@ -236,6 +264,18 @@ describe('run (multi-monitor fan-out)', () => {
     await run({ fetcher, sleep: vi.fn() });
     expect(setOutput).toHaveBeenCalledWith('unhealthy-count', '2');
     expect(setOutput).toHaveBeenCalledWith('unhealthy-ids', '1,2');
+    expect(process.exitCode).not.toBe(3);
+  });
+
+  it('all protocol_errors do NOT collapse to exit 3 (server was reachable)', async () => {
+    process.env['INPUT_MONITOR-IDS'] = '1,2';
+    process.env['INPUT_UNKNOWN-RETRY-DELAY-SECONDS'] = '0';
+    const { fetcher } = makeFetcher({
+      1: [{ kind: 'protocol_error', message: 'invalid JSON' }],
+      2: [{ kind: 'protocol_error', message: 'response missing state.status' }],
+    });
+    await run({ fetcher, sleep: vi.fn() });
+    // Reachable but unusable — exit 1, not 3.
     expect(process.exitCode).not.toBe(3);
   });
 
