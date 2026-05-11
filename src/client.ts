@@ -110,7 +110,15 @@ export function createFetcher(opts: FetcherOptions): Fetcher {
         (first.kind === 'http_error' && first.status >= 500 && first.status < 600) ||
         first.kind === 'transport_error';
       if (!isRetryable) return first;
-      return fetchOnce(url);
+      const second = await fetchOnce(url);
+      // If the first attempt was a reachable 5xx and the retry then loses
+      // the network, surfacing only the transport_error would let run()
+      // misclassify a reachable-but-erroring API as exit 3 (all-transport).
+      // Prefer the original http_error verdict in that case.
+      if (first.kind === 'http_error' && second.kind === 'transport_error') {
+        return first;
+      }
+      return second;
     },
   };
 }

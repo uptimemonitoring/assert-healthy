@@ -204,6 +204,21 @@ describe('createFetcher.getMonitor', () => {
     expect(state.getMock).toHaveBeenCalledTimes(2);
   });
 
+  it('preserves first 5xx verdict when retry loses connectivity', async () => {
+    state.getMock
+      .mockResolvedValueOnce(makeMockResponse('{"error":"boom"}', 503))
+      .mockRejectedValueOnce(new Error('ECONNRESET'));
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X' });
+    const result = await fetcher.getMonitor(1);
+    expect(result).toEqual({
+      kind: 'http_error',
+      status: 503,
+      body: '{"error":"boom"}',
+    });
+    expect(state.getMock).toHaveBeenCalledTimes(2);
+  });
+
   it('does not retry on 4xx', async () => {
     state.getMock.mockResolvedValue(makeMockResponse('{"error":"unauthorized"}', 401));
     const { createFetcher } = await import('../src/client.js');
