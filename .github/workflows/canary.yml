@@ -1,0 +1,78 @@
+name: Canary
+
+on:
+  schedule:
+    - cron: '0 6 * * 1' # Mondays 06:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  up-monitor-passes:
+    name: assert-healthy on a known-up monitor → expect pass
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.run.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: run
+        uses: ./
+        with:
+          api-key: ${{ secrets.UMK_LIVE_TEST_KEY }}
+          monitor-ids: ${{ vars.CANARY_MONITOR_UP_ID }}
+
+  down-monitor-fails:
+    name: assert-healthy on a known-down monitor → expect fail
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.run.outcome }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: run
+        uses: ./
+        with:
+          api-key: ${{ secrets.UMK_LIVE_TEST_KEY }}
+          monitor-ids: ${{ vars.CANARY_MONITOR_DOWN_ID }}
+        continue-on-error: true
+      - name: Verify the action got a real "down" verdict (not an API error)
+        env:
+          OUTCOME: ${{ steps.run.outcome }}
+          DOWN_IDS: ${{ steps.run.outputs.down-ids }}
+          EXPECTED_ID: ${{ vars.CANARY_MONITOR_DOWN_ID }}
+        run: |
+          if [ "$OUTCOME" != "failure" ]; then
+            echo "::error::Expected the action to fail on the known-down monitor, got outcome=$OUTCOME"
+            exit 1
+          fi
+          if [ "$DOWN_IDS" != "$EXPECTED_ID" ]; then
+            echo "::error::Expected down-ids=$EXPECTED_ID (a confirmed 'down' API verdict), got '$DOWN_IDS'. If empty, the action failed for a reason other than the monitor being down (auth revoked, network, API schema drift)."
+            exit 1
+          fi
+
+  notify-on-mismatch:
+    name: File a canary issue if any job mismatched
+    runs-on: ubuntu-latest
+    if: failure()
+    needs: [up-monitor-passes, down-monitor-fails]
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const title = `Canary mismatch on ${new Date().toISOString().slice(0, 10)}`;
+            const body = [
+              'The weekly canary workflow detected a mismatch.',
+              '',
+              `- Up monitor job: \`${{ needs.up-monitor-passes.result }}\``,
+              `- Down monitor job: \`${{ needs.down-monitor-fails.result }}\``,
+              '',
+              `Run: ${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+            ].join('\n');
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title,
+              body,
+              labels: ['canary'],
+            });

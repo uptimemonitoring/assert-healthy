@@ -1,0 +1,41 @@
+{
+  "name": "assert-healthy",
+  "version": "1.0.0",
+  "private": true,
+  "description": "GitHub Action that asserts uptimemonitoring.com monitors are healthy.",
+  "homepage": "https://github.com/uptimemonitoring/assert-healthy",
+  "bugs": "https://github.com/uptimemonitoring/assert-healthy/issues",
+  "license": "MIT",
+  "author": "uptimemonitoring.com",
+  "type": "module",
+  "engines": {
+    "node": ">=20 <21"
+  },
+  "scripts": {
+    "build": "ncc build src/entrypoint.ts -o dist --source-map --license licenses.txt --minify",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --coverage",
+    "test:watch": "vitest",
+    "all": "npm run lint && npm run typecheck && npm run test && npm run build"
+  },
+  "dependencies": {
+    "@actions/core": "1.11.1",
+    "@actions/http-client": "2.2.3"
+  },
+  "devDependencies": {
+    "@types/node": "20.17.10",
+    "@typescript-eslint/eslint-plugin": "8.18.1",
+    "@typescript-eslint/parser": "8.18.1",
+    "@vercel/ncc": "0.38.3",
+    "@vitest/coverage-v8": "2.1.8",
+    "eslint": "8.57.1",
+    "eslint-config-prettier": "9.1.0",
+    "eslint-plugin-prettier": "5.2.1",
+    "prettier": "3.4.2",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  }
+}

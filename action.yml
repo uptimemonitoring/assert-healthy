@@ -1,0 +1,34 @@
+name: 'Assert Healthy'
+description: 'Assert that one or more uptimemonitoring.com monitors are healthy. Fails the workflow step on any unhealthy monitor.'
+author: 'uptimemonitoring.com'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  api-key:
+    description: 'uptimemonitoring.com API key (umk_live_* or umk_test_*). Pass via a secret.'
+    required: true
+  monitor-ids:
+    description: 'Monitor IDs to assert healthy. Comma- or newline-separated. Each ID is checked independently; the step fails if any is unhealthy.'
+    required: true
+  strict-flapping:
+    description: 'When true (default), a `flapping` monitor fails the step. When false, `flapping` is treated as healthy.'
+    required: false
+    default: 'true'
+  unknown-retry-delay-seconds:
+    description: 'Seconds to wait before re-fetching a monitor in `unknown` state. After one retry, `unknown` fails the step.'
+    required: false
+    default: '10'
+
+outputs:
+  unhealthy-count:
+    description: 'Number of monitors that were unhealthy (any reason).'
+  unhealthy-ids:
+    description: 'Comma-separated IDs of unhealthy monitors (empty if all healthy). Includes monitors that failed for any reason — down, flapping, http error, transport error.'
+  down-ids:
+    description: 'Comma-separated IDs of monitors with a confirmed `down` verdict from the API. A subset of `unhealthy-ids` that excludes API errors and transport failures, so callers can distinguish "monitor is genuinely down" from "we could not get a verdict".'
+
+runs:
+  using: 'node20'
+  main: 'dist/index.js'
