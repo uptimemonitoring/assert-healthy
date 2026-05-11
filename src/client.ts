@@ -40,6 +40,51 @@ export interface FetcherOptions {
   retryOn5xx?: boolean;
 }
 
+// Downstream code (outcomeFromDetail, writeStepSummary) trusts the shape of
+// MonitorDetail at runtime. Validate every field we read before returning ok,
+// so a schema-drifted 200 body surfaces as protocol_error instead of crashing
+// later with a TypeError.
+function validateMonitorDetail(
+  parsed: unknown,
+): { kind: 'ok'; detail: MonitorDetail } | { kind: 'protocol_error'; message: string } {
+  if (!parsed || typeof parsed !== 'object') {
+    return { kind: 'protocol_error', message: 'response body is not a JSON object' };
+  }
+  const obj = parsed as Record<string, unknown>;
+  if (!obj.state || typeof obj.state !== 'object') {
+    return { kind: 'protocol_error', message: 'response missing state.status' };
+  }
+  const stateObj = obj.state as Record<string, unknown>;
+  if (typeof stateObj.status !== 'string') {
+    return { kind: 'protocol_error', message: 'response missing state.status' };
+  }
+  if (!KNOWN_STATUSES.includes(stateObj.status)) {
+    return {
+      kind: 'protocol_error',
+      message: `unexpected state.status from API: ${stateObj.status}`,
+    };
+  }
+  if (stateObj.last_check_at !== null && typeof stateObj.last_check_at !== 'string') {
+    return {
+      kind: 'protocol_error',
+      message: 'state.last_check_at must be string or null',
+    };
+  }
+  if (stateObj.primary_region !== undefined && typeof stateObj.primary_region !== 'string') {
+    return {
+      kind: 'protocol_error',
+      message: 'state.primary_region must be a string',
+    };
+  }
+  if (stateObj.evidence_buffer !== undefined && !Array.isArray(stateObj.evidence_buffer)) {
+    return {
+      kind: 'protocol_error',
+      message: 'state.evidence_buffer must be an array',
+    };
+  }
+  return { kind: 'ok', detail: parsed as MonitorDetail };
+}
+
 export function createFetcher(opts: FetcherOptions): Fetcher {
   const baseUrl = (opts.baseUrl ?? API_BASE_URL).replace(/\/+$/, '');
   const auth = new BearerCredentialHandler(opts.apiKey);
@@ -74,25 +119,10 @@ export function createFetcher(opts: FetcherOptions): Fetcher {
 
     if (status >= 200 && status < 300) {
       try {
-        const parsed = JSON.parse(body) as MonitorDetail;
-        if (
-          !parsed ||
-          typeof parsed !== 'object' ||
-          !parsed.state ||
-          typeof parsed.state.status !== 'string'
-        ) {
-          return {
-            kind: 'protocol_error',
-            message: 'response missing state.status',
-          };
-        }
-        if (!KNOWN_STATUSES.includes(parsed.state.status)) {
-          return {
-            kind: 'protocol_error',
-            message: `unexpected state.status from API: ${String(parsed.state.status)}`,
-          };
-        }
-        return { kind: 'ok', detail: parsed };
+        const parsed = JSON.parse(body) as unknown;
+        const validation = validateMonitorDetail(parsed);
+        if (validation.kind === 'protocol_error') return validation;
+        return { kind: 'ok', detail: validation.detail };
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         return { kind: 'protocol_error', message: `invalid JSON: ${message}` };

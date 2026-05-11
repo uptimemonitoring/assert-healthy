@@ -154,6 +154,63 @@ describe('createFetcher.getMonitor', () => {
     }
   });
 
+  it('returns protocol_error when evidence_buffer is not an array (schema drift)', async () => {
+    state.getMock.mockResolvedValue(
+      makeMockResponse(
+        JSON.stringify({
+          monitor: { id: 1 },
+          state: { status: 'down', last_check_at: 't', evidence_buffer: {} },
+        }),
+        200,
+      ),
+    );
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('protocol_error');
+    if (result.kind === 'protocol_error') {
+      expect(result.message).toContain('evidence_buffer');
+    }
+  });
+
+  it('returns protocol_error when last_check_at is not string or null', async () => {
+    state.getMock.mockResolvedValue(
+      makeMockResponse(
+        JSON.stringify({
+          monitor: { id: 1 },
+          state: { status: 'up', last_check_at: 12345 },
+        }),
+        200,
+      ),
+    );
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('protocol_error');
+    if (result.kind === 'protocol_error') {
+      expect(result.message).toContain('last_check_at');
+    }
+  });
+
+  it('returns protocol_error when primary_region is the wrong type', async () => {
+    state.getMock.mockResolvedValue(
+      makeMockResponse(
+        JSON.stringify({
+          monitor: { id: 1 },
+          state: { status: 'up', last_check_at: null, primary_region: 42 },
+        }),
+        200,
+      ),
+    );
+    const { createFetcher } = await import('../src/client.js');
+    const fetcher = createFetcher({ apiKey: 'umk_live_X', retryOn5xx: false });
+    const result = await fetcher.getMonitor(1);
+    expect(result.kind).toBe('protocol_error');
+    if (result.kind === 'protocol_error') {
+      expect(result.message).toContain('primary_region');
+    }
+  });
+
   it('returns transport_error when readBody rejects mid-stream', async () => {
     state.getMock.mockResolvedValue({
       message: { statusCode: 200 },
