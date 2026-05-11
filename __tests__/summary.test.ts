@@ -61,6 +61,24 @@ describe('writeStepSummary', () => {
     expect(writeSpy).not.toHaveBeenCalled();
   });
 
+  it('escapes raw HTML in detail (CDN/proxy error pages do not break the table)', async () => {
+    await writeStepSummary([
+      {
+        id: 7,
+        observedStatus: 'down',
+        outcome: { kind: 'unhealthy', reason: 'http_error' },
+        lastCheckAt: null,
+        region: null,
+        detail: '<html><body>502 Bad Gateway</body></html>',
+      },
+    ]);
+    const content = await fs.readFile(summaryFile, 'utf8');
+    expect(content).toContain('&lt;html&gt;');
+    expect(content).toContain('&lt;body&gt;');
+    expect(content).not.toContain('<html>');
+    expect(content).not.toContain('<body>');
+  });
+
   it('truncates very long detail strings', async () => {
     const long = 'x'.repeat(500);
     await writeStepSummary([

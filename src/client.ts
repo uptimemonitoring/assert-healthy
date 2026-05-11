@@ -44,7 +44,12 @@ export function createFetcher(opts: FetcherOptions): Fetcher {
   const baseUrl = (opts.baseUrl ?? API_BASE_URL).replace(/\/+$/, '');
   const auth = new BearerCredentialHandler(opts.apiKey);
   const retryOn5xx = opts.retryOn5xx ?? true;
-  const client = new HttpClient(USER_AGENT, [auth]);
+  // Disable implicit redirect following: @actions/http-client drops the
+  // Authorization header on cross-host hops, so a future CDN/API-host
+  // migration that returned a 30x to a different hostname would silently
+  // strip the bearer token and produce a misleading 401. We surface the
+  // redirect status as an http_error instead.
+  const client = new HttpClient(USER_AGENT, [auth], { allowRedirects: false });
 
   async function fetchOnce(url: string): Promise<FetchResult> {
     let response: HttpClientResponse;

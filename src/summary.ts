@@ -9,9 +9,9 @@ export async function writeStepSummary(outcomes: MonitorOutcome[]): Promise<void
     String(o.id),
     statusBadge(o.observedStatus),
     o.outcome.kind === 'healthy' ? 'pass' : 'fail',
-    o.lastCheckAt ?? '—',
-    o.region ?? '—',
-    truncate(o.detail ?? '', 80),
+    escapeHtml(o.lastCheckAt ?? '—'),
+    escapeHtml(o.region ?? '—'),
+    escapeHtml(truncate(o.detail ?? '', 80)),
   ]);
 
   await core.summary
@@ -41,4 +41,16 @@ function statusBadge(status: string): string {
 function truncate(s: string, n: number): string {
   if (s.length <= n) return s;
   return `${s.slice(0, n - 1)}…`;
+}
+
+// core.summary.addTable writes cells as raw HTML. Upstream error pages
+// (proxies, CDNs, auth gateways) often surface as raw markup in o.detail,
+// so escape every server-controlled cell before rendering.
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
